@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const fs = require('fs');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
 
@@ -42,4 +43,5 @@ client.on('messageCreate', message => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+const token = process.env.DISCORD_TOKEN;
+client.login(token);
