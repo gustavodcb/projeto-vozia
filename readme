@@ -1,5 +1,4 @@
-Adicione o token ao arquivo env, sempre que der commit remova o token se nao da erro
-
+crie um arquivo .env e adicione o token "DISCORD_TOKEN=SEU_TOKEN_DO_BOT_AQUI", sempre que der commit apague o arquivo se nao da erro!
 
 Para executar o bot execute no terminal "node index.js" dessa forma ele ficara online.
 
