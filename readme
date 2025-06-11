@@ -1,3 +1,6 @@
+Adicione o token ao arquivo env, sempre que der commit remova o token se nao da erro
+
+
 Para executar o bot execute no terminal "node index.js" dessa forma ele ficara online.
 
 Para encerrar dar ctrl + C no terminal
