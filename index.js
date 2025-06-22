@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const fs = require('fs');
+const path = require('path');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
 
 const client = new Client({
@@ -8,18 +9,22 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates, // Necessário para comandos de voz
+    GatewayIntentBits.GuildVoiceStates, // Necessário para interagir com canais de voz
   ],
 });
 
 client.commands = new Collection();
 
 // 🔄 Carrega todos os comandos da pasta 'commands'
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
-  client.commands.set(command.name, command);
+  if (command.name && typeof command.execute === 'function') {
+    client.commands.set(command.name, command);
+  } else {
+    console.warn(`⚠️ Comando "${file}" não possui 'name' ou 'execute'.`);
+  }
 }
 
 client.once('ready', () => {
