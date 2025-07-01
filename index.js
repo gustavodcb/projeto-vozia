@@ -9,13 +9,11 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates, // Necessário para interagir com canais de voz
+    GatewayIntentBits.GuildVoiceStates, 
   ],
 });
 
 client.commands = new Collection();
-
-// 🔄 Carrega todos os comandos da pasta 'commands'
 const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {

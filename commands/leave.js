@@ -4,7 +4,6 @@ module.exports = {
   name: 'leave',
   description: 'Faz o bot sair do canal de voz.',
   execute(message, args) {
-    // Pega a conexão do bot no servidor/guild
     const connection = getVoiceConnection(message.guild.id);
 
     if (!connection) {

@@ -7,8 +7,6 @@ module.exports = {
   description: 'Para a gravação e converte o último áudio gravado',
   async execute(message, args) {
     const recordingsDir = path.resolve(__dirname, '../recordings');
-
-    // Listar todos os arquivos .pcm
     const pcmFiles = fs.readdirSync(recordingsDir).filter(file => file.endsWith('.pcm'));
 
     if (pcmFiles.length === 0) {
