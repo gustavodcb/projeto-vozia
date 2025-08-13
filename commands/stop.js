@@ -1,14 +1,14 @@
 // commands/stop.js
 
-const fs = require('fs/promises'); // Usando a versão de promessas do fs
+const fs = require('fs/promises');
+const fsSync = require('fs'); // Importando a versão síncrona para verificar o tamanho dos arquivos
 const path = require('path');
 const { exec } = require('child_process');
 const util = require('util');
-const { activeRecordings } = require('../index.js'); // Importa o estado global
+const { activeRecordings } = require('../index.js');
 
 const execPromise = util.promisify(exec);
 
-// Importa nossos serviços
 const transcreverAudio = require('../services/transcriptionService.js');
 const { salvarFala } = require('../database/dbManager.js');
 
@@ -16,7 +16,6 @@ module.exports = {
   name: 'stop',
   description: 'Finaliza a gravação, processa e salva a transcrição.',
   async execute(message) {
-    // 1. VERIFICAR SE EXISTE UMA GRAVAÇÃO ATIVA
     const gravacaoAtiva = activeRecordings.get(message.guild.id);
     if (!gravacaoAtiva) {
       return message.reply('❌ Nenhuma gravação ativa encontrada para este servidor.');
@@ -27,38 +26,45 @@ module.exports = {
     const { reuniaoId, connection, userStreams, participantes } = gravacaoAtiva;
     const recordingsDir = path.resolve(__dirname, '../recordings');
     
-    // Encerra a conexão de voz e os streams de arquivo
-    connection.destroy();
+    // Encerra os streams de arquivo e a conexão de voz
     userStreams.forEach(stream => stream.end());
+    if (connection) {
+        connection.destroy();
+    }
     
     try {
-      // 2. ENCONTRAR E MIXAR OS ARQUIVOS PCM EM UM ÚNICO WAV
-      const pcmFiles = (await fs.readdir(recordingsDir)).filter(file => file.startsWith(`${reuniaoId}-`) && file.endsWith('.pcm'));
+      // 2. ENCONTRAR OS ARQUIVOS PCM E FILTRAR OS VAZIOS
+      const allPcmFiles = (await fs.readdir(recordingsDir)).filter(file => file.startsWith(`${reuniaoId}-`) && file.endsWith('.pcm'));
+      
+      // *** CORREÇÃO APLICADA AQUI ***
+      // Filtra a lista para manter apenas os arquivos PCM que têm mais de 0 bytes de tamanho.
+      const pcmFiles = allPcmFiles.filter(file => {
+          const stats = fsSync.statSync(path.join(recordingsDir, file));
+          return stats.size > 1024; // Usamos 1KB como um filtro seguro para ignorar arquivos só com ruído
+      });
 
+      // Se, após filtrar, não sobrar nenhum arquivo, ninguém falou.
       if (pcmFiles.length === 0) {
-        throw new Error('Nenhum arquivo de áudio foi gravado para esta reunião.');
+        // Lançamos um erro para pular direto para o bloco 'finally' e limpar os arquivos.
+        throw new Error('Nenhum áudio com conteúdo gravado.');
       }
       
       const mixedWavPath = path.join(recordingsDir, `${reuniaoId}-mixed.wav`);
       
-      // Constrói o comando ffmpeg para mixar múltiplos arquivos
+      // Constrói o comando ffmpeg APENAS com os arquivos que têm conteúdo.
       const inputs = pcmFiles.map(file => `-f s16le -ar 48000 -ac 1 -i "${path.join(recordingsDir, file)}"`).join(' ');
-      // O filtro 'amix' junta todos os inputs. 'duration=first' para quando o primeiro stream terminar.
       const ffmpegCmd = `ffmpeg -y ${inputs} -filter_complex "amix=inputs=${pcmFiles.length}:duration=first" "${mixedWavPath}"`;
 
-      await message.channel.send('🎛️ Mixando áudios individuais...');
+      await message.channel.send(`🎛️ Mixando áudios de ${pcmFiles.length} participante(s)...`);
       await execPromise(ffmpegCmd);
       
       // 3. TRANSCREVER O ÁUDIO MIXADO
       await message.channel.send('🗣️ Enviando para a AssemblyAI para transcrição...');
       const falasTranscritas = await transcreverAudio(mixedWavPath);
 
-      // 4. MAPEAMENTO DE LOCUTOR (Speaker Mapping) - SOLUÇÃO SIMPLES
-      // AssemblyAI não sabe os IDs do Discord. Esta é uma heurística simples:
-      // Assumimos que a ordem dos 'Speakers' corresponde à ordem dos participantes.
-      // ISTO PODE NÃO SER PRECISO! Mas é um começo funcional.
+      // 4. MAPEAMENTO DE LOCUTOR (Speaker Mapping)
       const speakerMap = {};
-      const speakersIdentificados = [...new Set(falasTranscritas.map(f => f.speaker))]; // ['Speaker A', 'Speaker B']
+      const speakersIdentificados = [...new Set(falasTranscritas.map(f => f.speaker))];
       speakersIdentificados.forEach((speaker, index) => {
           if (participantes[index]) {
               speakerMap[speaker] = participantes[index].id;
@@ -73,14 +79,21 @@ module.exports = {
         if (idUsuario) {
           await salvarFala(reuniaoId, idUsuario, fala.text);
           falasSalvas++;
+        } else {
+          console.warn(`Locutor ${fala.speaker} não encontrado no mapa de usuários. Esta fala não será salva.`);
         }
       }
 
       await message.channel.send(`✅ Processo finalizado! ${falasSalvas} falas foram salvas.`);
 
     } catch (error) {
-      console.error("Erro no processo de parada:", error);
-      message.channel.send("❌ Um erro crítico ocorreu durante o processamento. Verifique os logs.");
+      // Se o erro for por não ter áudio, envia uma mensagem amigável.
+      if (error.message === 'Nenhum áudio com conteúdo gravado.') {
+        await message.channel.send('⚠️ Gravação finalizada, mas ninguém falou. Nenhum áudio foi processado.');
+      } else {
+        console.error("Erro no processo de parada:", error);
+        await message.channel.send("❌ Um erro crítico ocorreu durante o processamento. Verifique os logs.");
+      }
     } finally {
       // 6. LIMPEZA FINAL
       console.log('Realizando limpeza de arquivos...');
@@ -88,7 +101,6 @@ module.exports = {
       for (const file of filesToDelete) {
         await fs.unlink(path.join(recordingsDir, file));
       }
-      // Remove a gravação do estado ativo
       activeRecordings.delete(message.guild.id);
       console.log('Limpeza concluída.');
     }

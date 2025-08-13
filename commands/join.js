@@ -9,7 +9,8 @@ module.exports = {
     joinVoiceChannel({
       channelId: channel.id,
       guildId: channel.guild.id,
-      adapterCreator: channel.guild.voiceAdapterCreator
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: false,
     });
 
     message.reply('✅ Entrei no canal de voz!');
