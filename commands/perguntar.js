@@ -1,43 +1,41 @@
 // commands/perguntar.js
 
-// Importando todas as nossas ferramentas
 const { buscarFalasRelevantes } = require('../database/dbManager.js');
-// MUDANÇA 1: Importamos sua função 'getEmbedding' diretamente, sem chaves {}.
 const getEmbedding = require('../services/embeddingService.js');
 const { gerarRespostaComIA } = require('../services/aiService.js');
 
 module.exports = {
   name: 'perguntar',
-  description: 'Faz uma pergunta sobre as reuniões gravadas.',
+  description: 'Faz uma pergunta sobre uma reunião específica.',
   async execute(message, args) {
-    const pergunta = args.join(' ');
+    // 1. PARSE DO INPUT
+    const idReuniao = args.shift(); // Pega o primeiro argumento, que deve ser o ID.
+    const pergunta = args.join(' '); // Junta o resto para formar a pergunta.
 
-    if (!pergunta) {
-      return message.reply('❓ Por favor, faça uma pergunta após o comando! Ex: `!perguntar Qual o prazo do projeto?`');
+    // 2. VALIDAÇÃO DO INPUT
+    if (!idReuniao || isNaN(idReuniao) || !pergunta) {
+      return message.reply('❓ Formato incorreto! Use: `!perguntar <ID da reunião> [sua pergunta]`.\nUse `!reunioes` para ver a lista de IDs.');
     }
 
-    const feedbackMessage = await message.reply(`🔍 Entendido! Buscando uma resposta para: "${pergunta}"`);
+    const feedbackMessage = await message.reply(`🔍 Entendido! Buscando na reunião **ID ${idReuniao}** uma resposta para: "${pergunta}"`);
 
     try {
-      // ETAPA 1: Transformar a pergunta em embedding.
       feedbackMessage.edit('🧠 Analisando sua pergunta...');
-      // MUDANÇA 2: Usamos o nome correto da sua função: getEmbedding.
       const embeddingDaPergunta = await getEmbedding(pergunta);
 
-      // ETAPA 2: Buscar falas relevantes no banco de dados.
-      feedbackMessage.edit('🗄️ Buscando no histórico de conversas...');
-      const contexto = await buscarFalasRelevantes(embeddingDaPergunta);
+      feedbackMessage.edit(`🗄️ Buscando no histórico da reunião ${idReuniao}...`);
+      // 3. CHAMADA DA FUNÇÃO ATUALIZADA
+      // Agora passamos o ID da reunião e o embedding.
+      const contexto = await buscarFalasRelevantes(idReuniao, embeddingDaPergunta);
 
       if (contexto.length === 0) {
-        return feedbackMessage.edit('🤔 Não encontrei nenhuma informação relevante sobre esse tópico nas gravações.');
+        return feedbackMessage.edit(`🤔 Não encontrei nenhuma informação sobre esse tópico na reunião **ID ${idReuniao}**.`);
       }
 
-      // ETAPA 3: Gerar uma resposta com IA usando o contexto.
       feedbackMessage.edit('🤖 Formulando uma resposta inteligente...');
       const respostaFinal = await gerarRespostaComIA(pergunta, contexto);
 
-      // ETAPA 4: Enviar a resposta final.
-      feedbackMessage.edit(`**Pergunta:** ${pergunta}\n\n**Resposta:**\n${respostaFinal}`);
+      feedbackMessage.edit(`**Reunião ID ${idReuniao} | Pergunta:** ${pergunta}\n\n**Resposta:**\n${respostaFinal}`);
 
     } catch (error) {
       console.error('Erro ao processar a pergunta:', error);

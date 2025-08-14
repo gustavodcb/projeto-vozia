@@ -6,6 +6,7 @@ const util = require('util');
 const { activeRecordings } = require('../index.js');
 const transcreverAudio = require('../services/transcriptionService.js');
 const { salvarFala } = require('../database/dbManager.js');
+const { finalizarReuniao } = require('../database/dbManager.js');
 
 // Converte a função exec baseada em callback para uma baseada em Promises
 const execPromise = util.promisify(exec);
@@ -21,7 +22,7 @@ module.exports = {
 
     await message.reply('▶️ Gravação parada. Iniciando processamento individual... Isso pode levar alguns minutos.');
 
-    const { reuniaoId, connection, userStreams } = gravacaoAtiva;
+    const { reuniaoId, connection, userStreams, startTime } = gravacaoAtiva;
     const recordingsDir = path.resolve(__dirname, '../recordings');
     
     // Encerra os streams de arquivo e a conexão de voz
@@ -31,6 +32,10 @@ module.exports = {
     }
     
     try {
+      const endTime = Date.now();
+      const duracaoEmSegundos = Math.round((endTime - startTime) / 1000);
+      await finalizarReuniao(reuniaoId, duracaoEmSegundos);
+
       // Pequeno atraso para garantir que os arquivos foram completamente escritos no disco
       await new Promise(resolve => setTimeout(resolve, 2000));
 

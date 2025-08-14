@@ -81,6 +81,7 @@ module.exports = {
         connection: connection,
         userStreams: userStreams,
         participantes: participantes,
+        startTime: Date.now(),
       });
       
       message.channel.send('🎙️ **Gravação contínua iniciada!** Use `!stop` para finalizar.');
