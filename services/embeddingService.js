@@ -4,7 +4,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // 2. Pega a chave de API do seu arquivo .env
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
  * Gera um vetor de embedding para um texto usando a API do Google (modelo Gemini).

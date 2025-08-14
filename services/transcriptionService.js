@@ -9,21 +9,21 @@ const client = new AssemblyAI({
 });
 
 /**
- * Transcreve um arquivo de áudio usando a API do AssemblyAI,
- * identificando os diferentes locutores.
+ * Transcreve um arquivo de áudio usando a API do AssemblyAI.
+ * Esta versão é otimizada para transcrever um arquivo com um único locutor.
  * @param {string} caminhoDoAudio O caminho para o arquivo de áudio local (ex: './recordings/audio.wav').
- * @returns {Promise<Array<{speaker: string, text: string}>>} Uma promessa que resolve para um array de "falas", 
- * onde cada fala é um objeto com o locutor e o texto.
+ * @returns {Promise<{text: string}>} Uma promessa que resolve para o objeto de transcrição, 
+ * que contém a propriedade 'text' com a transcrição completa.
  */
 async function transcreverAudio(caminhoDoAudio) {
-    console.log(`Iniciando transcrição para o arquivo: ${caminhoDoAudio}`);
+    console.log(`Iniciando transcrição para o arquivo de um único locutor: ${caminhoDoAudio}`);
 
     try {
+        // A chamada para a API foi simplificada. Removemos 'speaker_labels'.
+        // Agora, só pedimos a transcrição direta do áudio.
         const transcript = await client.transcripts.transcribe({
             audio: caminhoDoAudio,
-            // Esta é a configuração MÁGICA que você precisa!
-            // Ela diz para a API identificar e rotular quem está falando.
-            speaker_labels: true, 
+            language_code: 'pt',
         });
 
         // Verifica se a transcrição falhou
@@ -31,25 +31,20 @@ async function transcreverAudio(caminhoDoAudio) {
             throw new Error(`Erro de transcrição da AssemblyAI: ${transcript.error}`);
         }
         
-        // 'utterances' é a lista de falas separadas por locutor.
-        // Se não houver 'utterances', significa que a diarização pode não ter funcionado
-        // ou a gravação estava vazia. Retornamos um array vazio para evitar erros.
-        if (!transcript.utterances) {
-            console.warn("A transcrição foi concluída, mas não foram identificadas falas separadas por locutor.");
-            // Podemos retornar a transcrição completa como uma única fala de um locutor desconhecido
-            return [{ speaker: 'Desconhecido', text: transcript.text }];
+        // Se a transcrição for bem-sucedida, mas o texto estiver vazio, avisamos no console.
+        if (!transcript.text) {
+            console.warn(`Transcrição concluída para ${caminhoDoAudio}, mas nenhum texto foi detectado.`);
+        } else {
+            console.log(`Transcrição de ${caminhoDoAudio} concluída com sucesso!`);
         }
         
-        console.log("Transcrição concluída com sucesso!");
-        // Retornamos apenas os dados que nos interessam: o locutor (speaker) e o texto (text) de cada fala.
-        return transcript.utterances.map(fala => ({
-            speaker: `Speaker ${fala.speaker}`, // ex: 'Speaker A', 'Speaker B'
-            text: fala.text
-        }));
+        // Retornamos o objeto de transcrição completo.
+        // O arquivo `stop.js` irá acessar a propriedade `transcript.text`.
+        return transcript;
 
     } catch (error) {
-        console.error("Ocorreu um erro no serviço de transcrição:", error);
-        throw error; // Propaga o erro
+        console.error(`Ocorreu um erro no serviço de transcrição para o arquivo ${caminhoDoAudio}:`, error);
+        throw error; // Propaga o erro para ser tratado no 'stop.js'
     }
 }
 
