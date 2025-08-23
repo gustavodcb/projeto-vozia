@@ -1,7 +1,7 @@
 // commands/reunioes.js
 
-const { EmbedBuilder } = require('discord.js');
-const { listarReunioes } = require('../database/dbManager');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { listarReunioes } = require('../database/dbManager'); // Ajuste o caminho se necessário
 
 // Função auxiliar para formatar segundos em "Xm Ys"
 function formatarDuracao(segundos) {
@@ -14,33 +14,41 @@ function formatarDuracao(segundos) {
 }
 
 module.exports = {
-    name: 'reunioes',
-    description: 'Lista as últimas reuniões gravadas.',
-    async execute(message) {
+    // 1. Definição do comando de barra
+    data: new SlashCommandBuilder()
+        .setName('reunioes')
+        .setDescription('Lista as últimas reuniões gravadas.'),
+    
+    // 2. A função execute agora recebe 'interaction'
+    async execute(interaction) {
         try {
             const reunioes = await listarReunioes();
 
             if (reunioes.length === 0) {
-                return message.channel.send('Nenhuma reunião gravada encontrada.');
+                // 3. Usa interaction.reply para enviar a resposta
+                return interaction.reply('Nenhuma reunião gravada encontrada.');
             }
 
             const embed = new EmbedBuilder()
                 .setColor('#0099ff')
                 .setTitle('Últimas Reuniões Gravadas')
-                .setDescription('Use o ID de uma reunião para fazer perguntas sobre ela com o comando `!perguntar <ID> [sua pergunta]`.');
+                // Atualizado para sugerir o uso de um comando de barra
+                .setDescription('Use o ID de uma reunião para fazer perguntas sobre ela com o comando `/perguntar`.');
 
             reunioes.forEach(reuniao => {
                 embed.addFields({
                     name: `📝 ID: ${reuniao.id} - ${reuniao.titulo}`,
-                    // CORREÇÃO 3: Removida a parte da data, exibindo apenas a duração.
                     value: `🕒 Duração: ${formatarDuracao(reuniao.duracao_segundos)}`
                 });
             });
 
-            await message.channel.send({ embeds: [embed] });
+            // 3. Usa interaction.reply para enviar o embed
+            await interaction.reply({ embeds: [embed] });
+
         } catch (error) {
-            console.error('Erro ao executar o comando !reunioes:', error);
-            message.reply('❌ Ocorreu um erro ao buscar a lista de reuniões.');
+            console.error('Erro ao executar o comando /reunioes:', error);
+            // 3. Usa interaction.reply para a mensagem de erro, tornando-a efêmera
+            await interaction.reply({ content: '❌ Ocorreu um erro ao buscar a lista de reuniões.', ephemeral: true });
         }
     },
 };

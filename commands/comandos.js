@@ -1,42 +1,46 @@
 // commands/comandos.js
 
-const { EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
-    name: 'comandos',
-    description: 'Exibe a lista de todos os comandos disponíveis.',
-    async execute(message) {
+    // 1. Definição do comando de barra
+    data: new SlashCommandBuilder()
+        .setName('comandos')
+        .setDescription('Exibe a lista de todos os comandos disponíveis.'),
+    
+    // 2. A função execute agora recebe 'interaction'
+    async execute(interaction) {
         try {
-            // Pega a lista de todos os comandos que foram carregados pelo bot.
-            // O 'message.client' nos dá acesso ao cliente do bot, que contém a coleção de comandos.
-            const { commands } = message.client;
+            // 3. Acessa a coleção de comandos através de 'interaction.client'
+            const { commands } = interaction.client;
 
-            // Cria a base do nosso "Embed", que é um bloco de mensagem rico e formatado.
             const embed = new EmbedBuilder()
-                .setColor('#5865F2') // Cor oficial do Discord
+                .setColor('#5865F2') // Cor do Discord
                 .setTitle('🤖 Lista de Comandos do Vozia')
                 .setDescription('Aqui está tudo que eu posso fazer por você:')
-                .setThumbnail(message.client.user.displayAvatarURL()); // Adiciona o avatar do bot
+                .setThumbnail(interaction.client.user.displayAvatarURL()); // Pega o avatar do bot
 
-            // Passa por cada comando na lista para adicioná-lo ao embed.
+            // Itera sobre a coleção de comandos
             commands.forEach(command => {
-                // Ignora o próprio comando '!comandos' para não se listar.
-                if (command.name === 'comandos') return;
+                // 4. Acessa o nome do comando via 'command.data.name'
+                if (command.data.name === 'comandos') return;
 
-                // Adiciona um "campo" ao embed com o nome e a descrição do comando.
+                // Adiciona um campo ao embed para cada comando
                 embed.addFields({
-                    name: `\`!${command.name}\``, // O nome do comando formatado como código
-                    value: command.description,  // A descrição que você escreveu em cada arquivo de comando
-                    inline: false // Garante que cada comando fique em sua própria linha
+                    // 4. Formata o nome e pega a descrição de 'command.data'
+                    name: `\`/${command.data.name}\``,
+                    value: command.data.description,
+                    inline: false 
                 });
             });
 
-            // Envia a mensagem formatada para o canal.
-            await message.channel.send({ embeds: [embed] });
+            // 5. Responde à interação com o embed final
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
-            console.error('Erro ao executar o comando !comandos:', error);
-            message.reply('❌ Ocorreu um erro ao tentar exibir a lista de comandos.');
+            console.error('Erro ao executar o comando /comandos:', error);
+            // 5. Responde à interação com uma mensagem de erro efêmera
+            await interaction.reply({ content: '❌ Ocorreu um erro ao tentar exibir a lista de comandos.', ephemeral: true });
         }
     },
 };

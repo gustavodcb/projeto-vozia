@@ -1,16 +1,18 @@
 const { getVoiceConnection } = require('@discordjs/voice');
+const { SlashCommandBuilder } = require('@discordjs/builders');
 
 module.exports = {
-  name: 'leave',
-  description: 'Faz o bot sair do canal de voz.',
-  execute(message, args) {
-    const connection = getVoiceConnection(message.guild.id);
+  data: new SlashCommandBuilder()
+    .setName('leave')
+    .setDescription('Faz o Vozia sair da reunião.'),
+  async execute(interaction) {
+    const connection = getVoiceConnection(interaction.guild.id);
 
     if (!connection) {
-      return message.reply('❌ Não estou conectado em nenhum canal de voz aqui.');
+      return interaction.reply('❌ Não estou conectado em nenhum canal de voz aqui.');
     }
 
     connection.destroy();
-    message.reply('✅ Saí do canal de voz!');
+    await interaction.reply('✅ Saí do canal de voz!');
   },
 };

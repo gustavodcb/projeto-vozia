@@ -1,45 +1,58 @@
 // commands/perguntar.js
 
-const { buscarFalasRelevantes } = require('../database/dbManager.js');
-const getEmbedding = require('../services/embeddingService.js');
-const { gerarRespostaComIA } = require('../services/aiService.js');
+const { SlashCommandBuilder } = require('discord.js');
+const { buscarFalasRelevantes } = require('../database/dbManager.js'); // Ajuste o caminho
+const getEmbedding = require('../services/embeddingService.js'); // Ajuste o caminho
+const { gerarRespostaComIA } = require('../services/aiService.js'); // Ajuste o caminho
 
 module.exports = {
-  name: 'perguntar',
-  description: 'Faz uma pergunta sobre uma reunião específica.',
-  async execute(message, args) {
-    // 1. PARSE DO INPUT
-    const idReuniao = args.shift(); // Pega o primeiro argumento, que deve ser o ID.
-    const pergunta = args.join(' '); // Junta o resto para formar a pergunta.
+  // 1. Definição do comando de barra com opções
+  data: new SlashCommandBuilder()
+    .setName('perguntar')
+    .setDescription('Faz uma pergunta sobre uma reunião específica.')
+    .addIntegerOption(option => 
+      option.setName('id')
+        .setDescription('O ID da reunião para consultar.')
+        .setRequired(true))
+    .addStringOption(option =>
+      option.setName('pergunta')
+        .setDescription('A pergunta que você quer fazer sobre a reunião.')
+        .setRequired(true)),
 
-    // 2. VALIDAÇÃO DO INPUT
-    if (!idReuniao || isNaN(idReuniao) || !pergunta) {
-      return message.reply('❓ Formato incorreto! Use: `!perguntar <ID da reunião> [sua pergunta]`.\nUse `!reunioes` para ver a lista de IDs.');
-    }
+  // 2. A função execute agora recebe 'interaction'
+  async execute(interaction) {
+    // 3. Obtenção dos argumentos através das opções
+    const idReuniao = interaction.options.getInteger('id');
+    const pergunta = interaction.options.getString('pergunta');
 
-    const feedbackMessage = await message.reply(`🔍 Entendido! Buscando na reunião **ID ${idReuniao}** uma resposta para: "${pergunta}"`);
+    // A validação de formato é feita automaticamente pela API do Discord
+    // graças a .setRequired(true) e addIntegerOption.
+
+    // 4. A primeira resposta usa interaction.reply()
+    await interaction.reply(`🔍 Entendido! Buscando na reunião **ID ${idReuniao}** uma resposta para: "${pergunta}"`);
 
     try {
-      feedbackMessage.edit('🧠 Analisando sua pergunta...');
+      // 5. As atualizações subsequentes usam interaction.editReply()
+      await interaction.editReply('🧠 Analisando sua pergunta...');
       const embeddingDaPergunta = await getEmbedding(pergunta);
 
-      feedbackMessage.edit(`🗄️ Buscando no histórico da reunião ${idReuniao}...`);
-      // 3. CHAMADA DA FUNÇÃO ATUALIZADA
-      // Agora passamos o ID da reunião e o embedding.
+      await interaction.editReply(`🗄️ Buscando no histórico da reunião ${idReuniao}...`);
       const contexto = await buscarFalasRelevantes(idReuniao, embeddingDaPergunta);
 
       if (contexto.length === 0) {
-        return feedbackMessage.edit(`🤔 Não encontrei nenhuma informação sobre esse tópico na reunião **ID ${idReuniao}**.`);
+        return interaction.editReply(`🤔 Não encontrei nenhuma informação sobre esse tópico na reunião **ID ${idReuniao}**.`);
       }
 
-      feedbackMessage.edit('🤖 Formulando uma resposta inteligente...');
+      await interaction.editReply('🤖 Formulando uma resposta inteligente...');
       const respostaFinal = await gerarRespostaComIA(pergunta, contexto);
 
-      feedbackMessage.edit(`**Reunião ID ${idReuniao} | Pergunta:** ${pergunta}\n\n**Resposta:**\n${respostaFinal}`);
+      // 5. A resposta final também usa editReply para atualizar a mensagem inicial
+      await interaction.editReply(`**Reunião ID ${idReuniao} | Pergunta:** ${pergunta}\n\n**Resposta:**\n${respostaFinal}`);
 
     } catch (error) {
       console.error('Erro ao processar a pergunta:', error);
-      feedbackMessage.edit('❌ Ocorreu um erro crítico ao tentar encontrar a resposta. Verifique os logs.');
+      // 5. A mensagem de erro também atualiza a mensagem inicial
+      await interaction.editReply('❌ Ocorreu um erro crítico ao tentar encontrar a resposta. Verifique os logs.');
     }
   },
 };

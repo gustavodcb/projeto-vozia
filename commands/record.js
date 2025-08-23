@@ -1,26 +1,33 @@
+const { SlashCommandBuilder } = require('discord.js');
 const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
 const fs = require('fs');
 const path = require('path');
 const prism = require('prism-media');
 const { pipeline } = require('stream');
-const { activeRecordings } = require('../index.js');
-const { iniciarReuniao } = require('../database/dbManager.js');
+const { activeRecordings } = require('../sharedState.js'); // Ajuste o caminho se necessário
+const { iniciarReuniao } = require('../database/dbManager.js'); // Ajuste o caminho
 
 module.exports = {
-  name: 'record',
-  description: 'Inicia uma nova gravação, registrando-a no banco de dados.',
-  async execute(message) {
-    const voiceChannel = message.member.voice.channel;
+  // 1. Definição do comando de barra
+  data: new SlashCommandBuilder()
+    .setName('record')
+    .setDescription('Inicia uma gravação de áudio da reunião.'),
+
+  // 2. A função execute agora recebe 'interaction'
+  async execute(interaction) {
+    // 3. Obtém o canal de voz e o ID do servidor a partir da interação
+    const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
-      return message.reply('❌ Você precisa estar em um canal de voz para iniciar uma gravação!');
+      return interaction.reply({ content: '❌ Você precisa estar em um canal de voz para iniciar uma gravação!', ephemeral: true });
     }
 
-    if (activeRecordings.has(message.guild.id)) {
-      return message.reply('⚠️ Uma gravação já está em andamento neste servidor.');
+    if (activeRecordings.has(interaction.guild.id)) {
+      return interaction.reply({ content: '⚠️ Uma gravação já está em andamento neste servidor.', ephemeral: true });
     }
 
     try {
-      await message.reply('Iniciando uma nova reunião... Registrando participantes no banco de dados.');
+      // 4. A primeira resposta usa interaction.reply() para confirmar o início do processo
+      await interaction.reply('Iniciando uma nova reunião... Registrando participantes no banco de dados.');
       
       const participantes = voiceChannel.members
         .filter(member => !member.user.bot)
@@ -32,12 +39,13 @@ module.exports = {
       const tituloReuniao = `Reunião em ${voiceChannel.name} - ${new Date().toLocaleString()}`;
       const idReuniao = await iniciarReuniao(tituloReuniao, voiceChannel.name, participantes);
       
-      await message.channel.send(`✅ Reunião registrada com ID: \`${idReuniao}\`. Iniciando gravação de áudio...`);
+      // 5. Mensagens seguintes usam interaction.followUp()
+      await interaction.followUp(`✅ Reunião registrada com ID: \`${idReuniao}\`. Iniciando gravação de áudio...`);
 
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
-        guildId: message.guild.id,
-        adapterCreator: message.guild.voiceAdapterCreator,
+        guildId: interaction.guild.id,
+        adapterCreator: interaction.guild.voiceAdapterCreator, // <- vindo da interação
         selfDeaf: false,
       });
 
@@ -47,20 +55,14 @@ module.exports = {
       const userStreams = new Map();
 
       for (const member of voiceChannel.members.values()) {
-        if (member.user.bot) {
-          continue;
-        }
+        if (member.user.bot) continue;
 
         const userId = member.id;
-        // ================== A MUDANÇA ESTÁ AQUI ==================
         const opusStream = connection.receiver.subscribe(userId, {
           end: {
-            // Diz ao bot para NUNCA parar de gravar sozinho.
-            // A gravação só vai parar quando o comando !stop for executado.
             behavior: EndBehaviorType.Never, 
           },
         });
-        // ========================================================
 
         const pcmPath = path.join(recordingsDir, `${idReuniao}-${userId}.pcm`);
         const outputStream = fs.createWriteStream(pcmPath);
@@ -76,7 +78,7 @@ module.exports = {
         });
       }
 
-      activeRecordings.set(message.guild.id, {
+      activeRecordings.set(interaction.guild.id, {
         reuniaoId: idReuniao,
         connection: connection,
         userStreams: userStreams,
@@ -84,14 +86,18 @@ module.exports = {
         startTime: Date.now(),
       });
       
-      message.channel.send('🎙️ **Gravação contínua iniciada!** Use `!stop` para finalizar.');
+      // 5. Mensagens seguintes usam interaction.followUp()
+      await interaction.followUp('🎙️ **Gravação contínua iniciada!** Use `/stop` para finalizar.');
 
     } catch (error) {
       console.error('Erro ao iniciar a gravação:', error);
-      message.reply('❌ Ocorreu um erro crítico ao iniciar a gravação. Verifique os logs.');
-      if (activeRecordings.has(message.guild.id)) {
-        activeRecordings.get(message.guild.id).connection.destroy();
-        activeRecordings.delete(message.guild.id);
+      // Se a interação já foi respondida, edita a resposta original ou envia um follow-up com o erro.
+      await interaction.followUp('❌ Ocorreu um erro crítico ao iniciar a gravação. Verifique os logs.');
+
+      // Limpeza em caso de falha
+      if (activeRecordings.has(interaction.guild.id)) {
+        activeRecordings.get(interaction.guild.id).connection.destroy();
+        activeRecordings.delete(interaction.guild.id);
       }
     }
   },
