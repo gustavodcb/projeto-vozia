@@ -14,40 +14,47 @@ function formatarDuracao(segundos) {
 }
 
 module.exports = {
-    // 1. Definição do comando de barra
     data: new SlashCommandBuilder()
         .setName('reunioes')
         .setDescription('Lista as últimas reuniões gravadas.'),
     
-    // 2. A função execute agora recebe 'interaction'
     async execute(interaction) {
         try {
             const reunioes = await listarReunioes();
 
             if (reunioes.length === 0) {
-                // 3. Usa interaction.reply para enviar a resposta
                 return interaction.reply('Nenhuma reunião gravada encontrada.');
             }
 
             const embed = new EmbedBuilder()
                 .setColor('#0099ff')
                 .setTitle('Últimas Reuniões Gravadas')
-                // Atualizado para sugerir o uso de um comando de barra
                 .setDescription('Use o ID de uma reunião para fazer perguntas sobre ela com o comando `/perguntar`.');
 
             reunioes.forEach(reuniao => {
+                // <-- MUDANÇA AQUI: Início da formatação da data
+                let dataFormatada = 'Data não registrada';
+                if (reuniao.data_inicio) {
+                    // Converte o timestamp (segundos) para milissegundos para o JavaScript
+                    const dataInicio = new Date(reuniao.data_inicio * 1000);
+                    // Formata para o padrão brasileiro, incluindo data e hora
+                    dataFormatada = dataInicio.toLocaleString('pt-BR', {
+                        timeZone: 'America/Brasília' // IMPORTANTE: Defina seu fuso horário
+                    });
+                }
+                // <-- MUDANÇA AQUI: Fim da formatação da data
+
                 embed.addFields({
                     name: `📝 ID: ${reuniao.id} - ${reuniao.titulo}`,
-                    value: `🕒 Duração: ${formatarDuracao(reuniao.duracao_segundos)}`
+                    // <-- MUDANÇA AQUI: Exibe a data formatada e a duração na mesma linha
+                    value: `📅 Início: **${dataFormatada}**\n🕒 Duração: ${formatarDuracao(reuniao.duracao_segundos)}`
                 });
             });
 
-            // 3. Usa interaction.reply para enviar o embed
             await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Erro ao executar o comando /reunioes:', error);
-            // 3. Usa interaction.reply para a mensagem de erro, tornando-a efêmera
             await interaction.reply({ content: '❌ Ocorreu um erro ao buscar a lista de reuniões.', ephemeral: true });
         }
     },

@@ -1,27 +1,22 @@
-// database/dbManager.js
-
 const pool = require('./db');
 const getEmbedding = require('../services/embeddingService');
 
-// =========================================================================
-// CONFIGURAÇÃO CENTRAL DE NOMES - BASEADO NAS SUAS IMAGENS E ERROS
 const NOME_DA_TABELA_REUNIOES = 'reuniao';
 const NOME_DA_TABELA_USUARIOS = 'usuario';
 const NOME_DA_TABELA_TRANSCRICOES = 'transcricoes';
 const NOME_DA_TABELA_PARTICIPOU = 'participou';
-// =========================================================================
 
-
-async function iniciarReuniao(titulo, nomeCanal, participantes) {
+// <-- MUDANÇA AQUI: A função agora aceita um quarto parâmetro 'dataInicio'.
+async function iniciarReuniao(titulo, nomeCanal, participantes, dataInicio) {
     console.log('[DB] Tentando iniciar uma nova reunião...');
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // CORREÇÃO 1: Removida a coluna 'data_inicio' da query INSERT.
+        // <-- MUDANÇA AQUI: A query INSERT agora inclui a coluna 'data_inicio' e o valor $3.
         const resReuniao = await client.query(
-            `INSERT INTO ${NOME_DA_TABELA_REUNIOES} (titulo, canal_chamada) VALUES ($1, $2) RETURNING id`,
-            [titulo, nomeCanal]
+            `INSERT INTO ${NOME_DA_TABELA_REUNIOES} (titulo, canal_chamada, data_inicio) VALUES ($1, $2, $3) RETURNING id`,
+            [titulo, nomeCanal, dataInicio] // <-- MUDANÇA AQUI: O valor de 'dataInicio' é adicionado ao array.
         );
         const idReuniao = resReuniao.rows[0].id;
         
@@ -43,9 +38,6 @@ async function iniciarReuniao(titulo, nomeCanal, participantes) {
     }
 }
 
-// As funções salvarFala e buscarFalasRelevantes permanecem as mesmas da versão anterior,
-// pois estavam corretas.
-
 async function salvarFala(reuniaoId, usuarioId, texto) {
     if (!texto || texto.trim() === '') return;
     try {
@@ -65,20 +57,18 @@ async function salvarFala(reuniaoId, usuarioId, texto) {
 async function buscarFalasRelevantes(idReuniao, embeddingDaPergunta) {
     const embeddingString = JSON.stringify(embeddingDaPergunta);
     
-    // A MUDANÇA ESTÁ AQUI: Adicionamos a cláusula "WHERE" para filtrar pelo ID da reunião.
     const query = `
         SELECT
             u.nome AS username,
             t.texto_fala
         FROM ${NOME_DA_TABELA_TRANSCRICOES} t
         JOIN ${NOME_DA_TABELA_USUARIOS} u ON t.id_usuario = u.id
-        WHERE t.id_reuniao = $2  -- <-- FILTRO ADICIONADO AQUI
+        WHERE t.id_reuniao = $2
         ORDER BY
             t.embedding <=> $1
         LIMIT 5;
     `;
     try {
-        // Agora passamos DOIS parâmetros para a query: o embedding e o id da reunião.
         const { rows } = await pool.query(query, [embeddingString, idReuniao]);
         return rows;
     } catch (error) {
@@ -88,11 +78,12 @@ async function buscarFalasRelevantes(idReuniao, embeddingDaPergunta) {
 }
 
 async function listarReunioes() {
-    // CORREÇÃO 2: Removida a coluna 'data_inicio' da query SELECT.
+    // <-- MUDANÇA AQUI: Adicionada a coluna 'data_inicio' para ser exibida.
+    // Também mudei a ordenação para ser pela data, que é mais útil.
     const query = `
-        SELECT id, titulo, duracao_segundos
+        SELECT id, titulo, duracao_segundos, data_inicio
         FROM ${NOME_DA_TABELA_REUNIOES} 
-        ORDER BY id DESC 
+        ORDER BY data_inicio DESC, id DESC
         LIMIT 10;
     `;
     try {
